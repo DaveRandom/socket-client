@@ -7,6 +7,7 @@ use React\Dns\Resolver\Resolver;
 use React\Stream\Stream;
 use React\Promise;
 use React\Promise\Deferred;
+use React\Uri\Uri;
 
 class Connector implements ConnectorInterface
 {
@@ -19,12 +20,16 @@ class Connector implements ConnectorInterface
         $this->resolver = $resolver;
     }
 
-    public function create($host, $port)
+    public function create($uri, $ctx)
     {
+        if (!$uri instanceof Uri) {
+            $uri = new Uri($uri);
+        }
+
         return $this
-            ->resolveHostname($host)
-            ->then(function ($address) use ($port) {
-                return $this->createSocketForAddress($address, $port);
+            ->resolveHostname($uri)
+            ->then(function ($address) use ($uri) {
+                return $this->createSocketForAddress($address, $uri->port);
             });
     }
 
@@ -91,12 +96,12 @@ class Connector implements ConnectorInterface
         return sprintf('tcp://%s:%s', $host, $port);
     }
 
-    protected function resolveHostname($host)
+    protected function resolveHostname($uri)
     {
-        if (false !== filter_var($host, FILTER_VALIDATE_IP)) {
-            return Promise\resolve($host);
+        if ($uri->hostType & Uri::HOSTTYPE_IP) {
+            return Promise\resolve($uri->host);
         }
 
-        return $this->resolver->resolve($host);
+        return $this->resolver->resolve($uri->host);
     }
 }
