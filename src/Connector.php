@@ -38,7 +38,7 @@ class Connector implements ConnectorInterface
             return $this->createSocketForAddress($address, $ctx);
         }
 
-        throw new UnsupportedUriSchemeException($uri->scheme . ':// URIs are not supported');
+        throw new UnsupportedUriSchemeException($uri->scheme . ':// URIs are not supported by this connector');
     }
 
     public function createSocketForAddress($address, $ctx)

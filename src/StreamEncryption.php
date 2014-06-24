@@ -14,7 +14,7 @@ use UnexpectedValueException;
 class StreamEncryption
 {
     private $loop;
-    private $method = STREAM_CRYPTO_METHOD_TLS_CLIENT;
+    private $defaultMethod = STREAM_CRYPTO_METHOD_TLS_CLIENT;
 
     private $errstr;
     private $errno;
@@ -46,8 +46,12 @@ class StreamEncryption
         // get actual stream socket from stream instance
         $socket = $stream->stream;
 
-        $toggleCrypto = function () use ($socket, $deferred, $toggle) {
-            $this->toggleCrypto($socket, $deferred, $toggle);
+        // figure out which crypto method to use
+        $options = stream_context_get_options($socket);
+        $method = isset($options['ssl']['crypto_method']) ? $options['ssl']['crypto_method'] : $this->defaultMethod;
+
+        $toggleCrypto = function () use ($socket, $deferred, $toggle, $method) {
+            $this->toggleCrypto($socket, $deferred, $toggle, $method);
         };
 
         $this->loop->addWriteStream($socket, $toggleCrypto);
@@ -63,10 +67,10 @@ class StreamEncryption
         });
     }
 
-    public function toggleCrypto($socket, Deferred $deferred, $toggle)
+    public function toggleCrypto($socket, Deferred $deferred, $toggle, $method)
     {
         set_error_handler(array($this, 'handleError'));
-        $result = stream_socket_enable_crypto($socket, $toggle, $this->method);
+        $result = stream_socket_enable_crypto($socket, $toggle, $method);
         restore_error_handler();
 
         if (true === $result) {
