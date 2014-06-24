@@ -4,7 +4,7 @@ namespace React\SocketClient;
 
 use React\EventLoop\LoopInterface;
 use React\Stream\Stream;
-use React\Uri\Uri;
+use React\Uri\MutableUri;
 
 class SecureConnector implements ConnectorInterface
 {
@@ -49,7 +49,7 @@ class SecureConnector implements ConnectorInterface
         return $result;
     }
 
-    private function createContextOpts(Uri $uri, $ctx)
+    private function createContextOpts(MutableUri $uri, $ctx)
     {
         if (!is_resource($ctx)) {
             $options = (array) $ctx;
@@ -77,14 +77,12 @@ class SecureConnector implements ConnectorInterface
 
     public function create($uri, $ctx)
     {
-        if (!$uri instanceof Uri) {
-            $uri = new Uri($uri);
-        }
+        $uri = new MutableUri($uri);
 
-        $tcpUri = $uri->getConnectionString(['scheme', 'host', 'port'], ['scheme' => 'tcp']);
         $ctxOpts = $this->createContextOpts($uri, $ctx);
+        $uri->scheme = 'tcp';
 
-        return $this->connector->create($tcpUri, $ctxOpts)
+        return $this->connector->create($uri, $ctxOpts)
             ->then(function (Stream $stream) {
                 // (unencrypted) connection succeeded => try to enable encryption
                 return $this->streamEncryption->enable($stream)
