@@ -20,28 +20,35 @@ class Connector implements ConnectorInterface
         $this->resolver = $resolver;
     }
 
-    public function create($uri, $ctx)
+    public function create($uri, $ctx = [])
     {
         if (!$uri instanceof Uri) {
             $uri = new Uri($uri);
         }
 
-        return $this
-            ->resolveHostname($uri)
-            ->then(function ($address) use ($uri) {
-                return $this->createSocketForAddress($address, $uri->port);
-            });
+        if ($uri->scheme === 'tcp') {
+            return $this
+                ->resolveHostname($uri)
+                ->then(function ($host) use ($uri, $ctx) {
+                    $address = $uri->getConnectionString(['scheme', 'host', 'port'], ['host' => $host]);
+                    return $this->createSocketForAddress($address, $ctx);
+                });
+        } else if ($uri->scheme === 'unix') {
+            $address = $uri->getConnectionString(['scheme', 'path']);
+            return $this->createSocketForAddress($address, $ctx);
+        }
+
+        throw new UnsupportedUriSchemeException($uri->scheme . ':// URIs are not supported');
     }
 
-    public function createSocketForAddress($address, $port)
+    public function createSocketForAddress($address, $ctx)
     {
-        $url = $this->getSocketUrl($address, $port);
-
-        $socket = stream_socket_client($url, $errno, $errstr, 0, STREAM_CLIENT_CONNECT | STREAM_CLIENT_ASYNC_CONNECT);
+        $flags = STREAM_CLIENT_CONNECT | STREAM_CLIENT_ASYNC_CONNECT;
+        $socket = stream_socket_client($address, $errno, $errstr, 0, $flags, $ctx);
 
         if (!$socket) {
             return Promise\reject(new \RuntimeException(
-                sprintf("connection to %s:%d failed: %s", $address, $port, $errstr),
+                sprintf("connection to %s failed: %s", $address, $errstr),
                 $errno
             ));
         }
@@ -85,15 +92,6 @@ class Connector implements ConnectorInterface
     public function handleConnectedSocket($socket)
     {
         return new Stream($socket, $this->loop);
-    }
-
-    protected function getSocketUrl($host, $port)
-    {
-        if (strpos($host, ':') !== false) {
-            // enclose IPv6 addresses in square brackets before appending port
-            $host = '[' . $host . ']';
-        }
-        return sprintf('tcp://%s:%s', $host, $port);
     }
 
     protected function resolveHostname($uri)
